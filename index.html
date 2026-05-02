@@ -13,11 +13,11 @@
   --mid: #3A3830; --muted: #6B6860; --text: #F0EDE8; --text2: #A8A49E;
   --red: #E05C5C; --green: #5CBF8A; --radius: 14px; --radius-sm: 8px;
 }
-.theme-ocean { --accent: #3B82F6; --accent-dark: #2563EB; --accent-light: #60A5FA; }
-.theme-forest { --accent: #22C55E; --accent-dark: #16A34A; --accent-light: #4ADE80; }
-.theme-purple { --accent: #A855F7; --accent-dark: #9333EA; --accent-light: #C084FC; }
-.theme-sunset { --accent: #F97316; --accent-dark: #EA580C; --accent-light: #FB923C; }
-.theme-slate  { --accent: #94A3B8; --accent-dark: #64748B; --accent-light: #CBD5E1; }
+.theme-ocean { --accent: #3B82F6; --accent-dark: #2563EB; --accent-light: #60A5FA; --dark: #070D1A; --dark2: #0D1526; --dark3: #152035; --mid: #1E3050; }
+.theme-forest { --accent: #22C55E; --accent-dark: #16A34A; --accent-light: #4ADE80; --dark: #071510; --dark2: #0D2018; --dark3: #142C22; --mid: #1E4030; }
+.theme-purple { --accent: #A855F7; --accent-dark: #9333EA; --accent-light: #C084FC; --dark: #0E0714; --dark2: #160D20; --dark3: #1E142C; --mid: #2E1E45; }
+.theme-sunset { --accent: #F97316; --accent-dark: #EA580C; --accent-light: #FB923C; --dark: #140A04; --dark2: #201208; --dark3: #2C1A0E; --mid: #3D2512; }
+.theme-slate  { --accent: #94A3B8; --accent-dark: #64748B; --accent-light: #CBD5E1; --dark: #0A0C10; --dark2: #111318; --dark3: #181C24; --mid: #252A35; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'DM Sans',sans-serif; background: var(--dark); color: var(--text); min-height: 100vh; overflow-x: hidden; }
 #auth-screen { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:var(--dark); background-image:radial-gradient(ellipse at 20% 50%,rgba(201,168,76,.08) 0%,transparent 60%); }
@@ -401,7 +401,10 @@ tr:hover td { background:rgba(255,255,255,.02); }
     <div class="page" id="page-superadmin">
       <div class="page-header">
         <div><h1 class="page-title">Superadmin</h1><p class="page-sub">Platform management</p></div>
-        <button class="btn btn-ghost btn-sm" onclick="loadSuperadmin()">Refresh</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-gold btn-sm" onclick="openModal('onboard-modal')">+ Onboard subscriber</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadSuperadmin()">Refresh</button>
+        </div>
       </div>
       <div class="stats-grid" id="sa-stats"></div>
       <div class="card">
@@ -528,6 +531,36 @@ tr:hover td { background:rgba(255,255,255,.02); }
       <p style="color:var(--text2);font-size:14px;margin-bottom:16px">Share this link with the client. They will enter their PIN to view their savings record.</p>
       <div style="background:var(--dark3);border-radius:var(--radius-sm);padding:12px 16px;font-family:'DM Mono',monospace;font-size:12px;word-break:break-all;color:var(--text)" id="booklet-link-display"></div>
       <button class="btn btn-ghost w-full mt-3" onclick="copyBookletLink()">Copy link</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Onboard Subscriber -->
+<div class="modal-overlay" id="onboard-modal">
+  <div class="modal">
+    <div class="modal-header"><h2 class="modal-title">Onboard New Subscriber</h2><button class="modal-close" onclick="closeModal('onboard-modal')">x</button></div>
+    <div class="modal-body">
+      <p style="color:var(--text2);font-size:14px;margin-bottom:16px">Create a company account on behalf of a subscriber. They will receive login credentials.</p>
+      <div class="form-group"><label class="form-label">Company name *</label><input type="text" id="ob-company" class="form-input" placeholder="Kofi Susu Group"></div>
+      <div class="form-group"><label class="form-label">Owner name *</label><input type="text" id="ob-name" class="form-input" placeholder="Kofi Mensah"></div>
+      <div class="form-group"><label class="form-label">Email *</label><input type="email" id="ob-email" class="form-input" placeholder="kofi@example.com"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input type="tel" id="ob-phone" class="form-input" placeholder="+233..."></div>
+      <div class="form-group"><label class="form-label">Temporary password *</label><input type="text" id="ob-password" class="form-input" placeholder="They can change this after login" value="Asusu2026!"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label class="form-label">Monthly fee (GHS)</label><input type="number" id="ob-fee" class="form-input" placeholder="200"></div>
+        <div class="form-group"><label class="form-label">Trial days</label><input type="number" id="ob-trial" class="form-input" value="30"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subscription status</label>
+        <select id="ob-status" class="form-input">
+          <option value="trial">Trial</option>
+          <option value="active">Active (paid)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('onboard-modal')">Cancel</button>
+      <button class="btn btn-gold" onclick="onboardSubscriber()">Create account</button>
     </div>
   </div>
 </div>
@@ -1024,6 +1057,31 @@ async function loadBookletContent(pin){
     const tbody=document.getElementById('booklet-history-table');
     if(!data.contributions.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">No payments yet</td></tr>';return}
     tbody.innerHTML=data.contributions.map(c=>`<tr><td>Day ${c.day_number}</td><td>${fmtDate(c.contribution_date)}</td><td class="text-accent">${ghs(c.amount)}</td><td><span class="badge badge-active">Paid</span></td></tr>`).join('');
+  }catch(err){toast(err.message,'error')}
+}
+
+async function onboardSubscriber(){
+  const body={company_name:document.getElementById('ob-company').value.trim(),owner_name:document.getElementById('ob-name').value.trim(),email:document.getElementById('ob-email').value.trim(),password:document.getElementById('ob-password').value,phone:document.getElementById('ob-phone').value.trim()};
+  if(!body.company_name||!body.owner_name||!body.email||!body.password){toast('Company name, owner name, email and password are required','error');return}
+  try{
+    const data=await api('/api/auth/register',{method:'POST',body:JSON.stringify(body)});
+    // Update fee and status if set
+    const fee=parseFloat(document.getElementById('ob-fee').value);
+    const status=document.getElementById('ob-status').value;
+    const trialDays=parseInt(document.getElementById('ob-trial').value)||30;
+    const trialEnds=new Date(Date.now()+trialDays*86400000);
+    const updates={subscription_status:status,trial_ends_at:trialEnds.toISOString()};
+    if(!isNaN(fee))updates.monthly_fee=fee;
+    // Find the company just created
+    const companies=await api('/api/superadmin/companies');
+    const newCompany=companies.find(c=>c.email===body.email.toLowerCase());
+    if(newCompany)await api('/api/superadmin/companies/'+newCompany._id,{method:'PATCH',body:JSON.stringify(updates)});
+    toast('Subscriber onboarded! Company code: '+data.company_code,'success');
+    closeModal('onboard-modal');
+    ['ob-company','ob-name','ob-email','ob-phone'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('ob-password').value='Asusu2026!';
+    document.getElementById('ob-trial').value='30';
+    loadSuperadmin();
   }catch(err){toast(err.message,'error')}
 }
 
