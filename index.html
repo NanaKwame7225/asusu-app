@@ -706,7 +706,15 @@ async function initApp(){
       document.getElementById('sidebar-user-role').textContent=currentUser.role;
       document.getElementById('dashboard-date').textContent=new Date().toLocaleDateString('en-GH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
       document.getElementById('settings-email').textContent=currentUser.email;
-      if(currentUser.role==='superadmin'){document.getElementById('nav-superadmin').style.display='';document.getElementById('nav-workers').style.display='none';showPage('superadmin')}
+      if(currentUser.role==='superadmin'){
+        document.getElementById('nav-superadmin').style.display='';
+        // Hide all non-superadmin nav items
+        document.querySelectorAll('.nav-item[data-page],.mobile-nav-item[data-page]').forEach(el=>{
+          const page=el.getAttribute('data-page');
+          if(page!=='superadmin')el.style.display='none';
+        });
+        showPage('superadmin');
+      }
       else loadDashboard();
     }
   }catch(err){logout()}
