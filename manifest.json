@@ -1,0 +1,27 @@
+{
+  "name": "Asusu — Digital Susu Collector",
+  "short_name": "Asusu",
+  "description": "Digital susu collection management for Ghana collectors",
+  "start_url": "/asusu-app/",
+  "scope": "/asusu-app/",
+  "display": "standalone",
+  "background_color": "#0F0E0C",
+  "theme_color": "#C9A84C",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business", "productivity"],
+  "lang": "en-GH"
+}
