@@ -258,7 +258,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
     </div>
     <div class="card">
       <div class="card-header"><span class="card-title">Payment history</span></div>
-      <table><thead><tr><th>Day</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Day</th><th>Date</th><th>Collected by</th><th>Amount</th><th>Status</th><th></th></tr></thead>
       <tbody id="booklet-history-table"></tbody></table>
     </div>
   </div>
@@ -605,6 +605,37 @@ tr:hover td { background:rgba(255,255,255,.02); }
 </div>
 
 <div class="toast-container" id="toast-container"></div>
+
+<!-- MODAL: Dispute Payment -->
+<div class="modal-overlay" id="dispute-modal">
+  <div class="modal">
+    <div class="modal-header"><h2 class="modal-title" style="color:var(--red)">Report Suspicious Payment</h2><button class="modal-close" onclick="closeModal('dispute-modal')">x</button></div>
+    <div class="modal-body">
+      <div style="background:rgba(224,92,92,.1);border:1px solid rgba(224,92,92,.3);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px">
+        <div style="font-size:13px;color:var(--red);font-weight:600;margin-bottom:4px">Payment you are disputing</div>
+        <div style="font-size:14px;color:var(--text)" id="dispute-payment-info"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason</label>
+        <select id="dispute-reason" class="form-input">
+          <option value="did_not_pay">I did not make this payment</option>
+          <option value="wrong_amount">Wrong amount recorded</option>
+          <option value="wrong_date">Wrong date recorded</option>
+          <option value="collector_fraud">I believe my collector tampered with my account</option>
+          <option value="other">Other reason</option>
+        </select>
+      </div>
+      <div class="form-group" id="dispute-pin-group">
+        <label class="form-label">Your PIN</label>
+        <input type="password" id="dispute-pin" class="form-input" placeholder="Enter your booklet PIN to confirm" maxlength="8">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('dispute-modal')">Cancel</button>
+      <button class="btn btn-danger" style="width:auto" onclick="submitDispute()">Submit dispute</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const API='https://asusu-backend-7dgd.onrender.com';
@@ -1103,8 +1134,24 @@ async function loadBookletContent(pin){
       document.getElementById('booklet-grid').innerHTML='<p style="color:var(--muted);font-size:14px;grid-column:1/-1">No active cycle</p>';
     }
     const tbody=document.getElementById('booklet-history-table');
-    if(!data.contributions.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">No payments yet</td></tr>';return}
-    tbody.innerHTML=data.contributions.map(c=>`<tr><td>Day ${c.day_number}</td><td>${fmtDate(c.contribution_date)}</td><td class="text-accent">${ghs(c.amount)}</td><td><span class="badge badge-active">Paid</span></td></tr>`).join('');
+    if(!data.contributions.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No payments yet</td></tr>';return}
+    tbody.innerHTML=data.contributions.map(c=>{
+      const isDisputed=c.fraud_flags&&c.fraud_flags.includes('CLIENT_DISPUTE');
+      const isFlagged=c.fraud_flags&&c.fraud_flags.some(f=>f!=='CLIENT_DISPUTE');
+      const collectedBy=c.worker_id?.full_name||'Owner';
+      const collectorCode=c.worker_id?.worker_code||'';
+      return`<tr style="${isDisputed?'background:rgba(224,92,92,.08)':''}">
+        <td>Day ${c.day_number}</td>
+        <td>${fmtDate(c.contribution_date)}</td>
+        <td style="font-size:13px">${collectedBy}${collectorCode?` <span style="color:var(--muted);font-size:11px">(${collectorCode})</span>`:''}</td>
+        <td class="text-accent">${ghs(c.amount)}</td>
+        <td>
+          ${isDisputed?'<span class="badge badge-suspended">Disputed</span>':'<span class="badge badge-active">Paid</span>'}
+          ${isFlagged&&!isDisputed?'<span class="badge badge-suspended" style="margin-left:4px">Flagged</span>':''}
+        </td>
+        <td>${!isDisputed?`<button class="btn btn-danger btn-sm" onclick="openDisputeModal('${c._id}',${c.day_number},'${fmtDate(c.contribution_date)}',${c.amount})">Report</button>`:'<span style="font-size:11px;color:var(--red)">Under review</span>'}</td>
+      </tr>`;
+    }).join('');
   }catch(err){toast(err.message,'error')}
 }
 
@@ -1131,6 +1178,35 @@ async function onboardSubscriber(){
     document.getElementById('ob-trial').value='30';
     loadSuperadmin();
   }catch(err){toast(err.message,'error')}
+}
+
+let disputeContributionId = null;
+let bookletPinForDispute = null;
+
+function openDisputeModal(contribId, dayNum, date, amount) {
+  disputeContributionId = contribId;
+  document.getElementById('dispute-payment-info').textContent = `Day ${dayNum} — ${date} — ${ghs(amount)}`;
+  document.getElementById('dispute-pin').value = '';
+  openModal('dispute-modal');
+}
+
+async function submitDispute() {
+  const reason = document.getElementById('dispute-reason').value;
+  const pin = document.getElementById('dispute-pin').value;
+  if (!disputeContributionId) return;
+  try {
+    await fetch(API + '/api/booklet/' + bookletToken + '/dispute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contribution_id: disputeContributionId, reason, pin })
+    }).then(r => r.json()).then(data => {
+      if (data.error) throw new Error(data.error);
+    });
+    toast('Dispute submitted. Your collector has been notified.', 'success');
+    closeModal('dispute-modal');
+    // Reload booklet content
+    await loadBookletContent(pin);
+  } catch(err) { toast(err.message, 'error'); }
 }
 
 loadTheme();
