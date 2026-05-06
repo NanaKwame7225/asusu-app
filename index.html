@@ -147,6 +147,8 @@ tr:hover td { background:rgba(255,255,255,.02); }
 .booklet-day.unpaid { background:var(--dark3); color:var(--muted); }
 .booklet-day.future { background:transparent; border:1px solid var(--dark3); color:var(--muted); opacity:.4; }
 .form-hint { font-size:11px; color:var(--muted); margin-top:4px; }
+.booklet-day.missed { background:rgba(224,92,92,.2); color:var(--red); border:1px solid rgba(224,92,92,.3); }
+.missed-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:600; background:rgba(224,92,92,.15); color:var(--red); }
 </style>
 </head>
 <body>
@@ -331,6 +333,16 @@ tr:hover td { background:rgba(255,255,255,.02); }
         <div class="stat-card"><div class="stat-label">Active cycles</div><div class="stat-value" id="stat-cycles">-</div></div>
         <div class="stat-card"><div class="stat-label">Today collected</div><div class="stat-value text-accent" id="stat-today">-</div><div class="stat-sub" id="stat-today-count">0 payments</div></div>
         <div class="stat-card"><div class="stat-label">This month</div><div class="stat-value text-accent" id="stat-month">-</div></div>
+      </div>
+      <div class="card" id="missed-card" style="margin-bottom:20px;border-color:rgba(224,92,92,.3);display:none">
+        <div class="card-header" style="background:rgba(224,92,92,.06)">
+          <span class="card-title" style="display:flex;align-items:center;gap:8px;color:var(--red)">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block"></span>
+            Missed payments today
+          </span>
+          <span style="font-size:12px;color:var(--red)" id="missed-count-label"></span>
+        </div>
+        <div id="missed-list"></div>
       </div>
       <div class="card">
         <div class="card-header"><span class="card-title">Recent clients</span></div>
@@ -772,12 +784,33 @@ function showPage(name){
 
 async function loadDashboard(){
   try{
-    const stats=await api('/api/dashboard/stats');
+    const [stats, missed] = await Promise.all([
+      api('/api/dashboard/stats'),
+      api('/api/dashboard/missed')
+    ]);
     document.getElementById('stat-clients').textContent=stats.clientCount;
     document.getElementById('stat-cycles').textContent=stats.activeCycles;
     document.getElementById('stat-today').textContent=ghs(stats.todayCollected);
     document.getElementById('stat-today-count').textContent=stats.todayCount+' payments';
     document.getElementById('stat-month').textContent=ghs(stats.monthCollected);
+
+    // Missed payments
+    const missedCard=document.getElementById('missed-card');
+    const missedList=document.getElementById('missed-list');
+    if(missed.length){
+      missedCard.style.display='block';
+      document.getElementById('missed-count-label').textContent=missed.length+' client'+(missed.length>1?'s':'')+' have not paid today';
+      missedList.innerHTML='<table><tbody>'+missed.map(m=>`<tr>
+        <td>${m.client?.photo_url?`<img src="${m.client.photo_url}" class="avatar-circle">`:`<div class="avatar-letter">${(m.client?.full_name||'?').charAt(0)}</div>`}</td>
+        <td><strong>${m.client?.full_name||'Unknown'}</strong><br><span style="font-size:12px;color:var(--muted)">${m.client?.market_location||''}</span></td>
+        <td class="mono text-muted">${m.client?.client_code||'-'}</td>
+        <td class="text-red">${ghs(m.daily_amount)}</td>
+        <td><span class="missed-badge">Missed today</span></td>
+      </tr>`).join('')+'</tbody></table>';
+    } else {
+      missedCard.style.display='none';
+    }
+
     const el=document.getElementById('recent-clients-list');
     if(!stats.recentClients.length){el.innerHTML='<div class="empty-state"><p>No clients yet.</p></div>';return}
     el.innerHTML='<table><thead><tr><th></th><th>Name</th><th>Code</th><th>Daily</th><th>Registered</th></tr></thead><tbody>'+
@@ -1078,7 +1111,8 @@ async function loadWorkerHistory(){
           <div class="booklet-grid">${Array.from({length:activeCycle.cycle.cycle_length},(_,i)=>{
             const dayNum=i+1,paid=activeCycle.contributions.some(c=>c.day_number===dayNum&&c.paid);
             const dayDate=new Date(new Date(activeCycle.cycle.start_date).getTime()+i*86400000);
-            return`<div class="booklet-day ${paid?'paid':dayDate>new Date()?'future':'unpaid'}" title="Day ${dayNum}">${dayNum}</div>`;
+            const isMissedDay=!paid&&dayDate<=new Date();
+            return`<div class="booklet-day ${paid?'paid':dayDate>new Date()?'future':'missed'}" title="${paid?'Paid':dayDate>new Date()?'Not yet due':'Missed'}">${dayNum}</div>`;
           }).join('')}</div>
         </div>`:''}
       </div>`;
@@ -1124,10 +1158,13 @@ async function loadBookletContent(pin){
       const c=data.activeCycle;
       document.getElementById('booklet-cycle-day').textContent='Day '+data.contributions.filter(ct=>ct.paid).length+'/'+c.cycle_length;
       document.getElementById('booklet-cycle-dates').textContent=fmtDate(c.start_date);
+      const now=new Date();
       document.getElementById('booklet-grid').innerHTML=Array.from({length:c.cycle_length},(_,i)=>{
         const dayNum=i+1,paid=data.contributions.some(ct=>ct.day_number===dayNum&&ct.paid);
         const dayDate=new Date(new Date(c.start_date).getTime()+i*86400000);
-        return`<div class="booklet-day ${paid?'paid':dayDate>new Date()?'future':'unpaid'}">${dayNum}</div>`;
+        const isFuture=dayDate>now;
+        const isMissed=!paid&&!isFuture;
+        return`<div class="booklet-day ${paid?'paid':isFuture?'future':'missed'}" title="${paid?'Paid':isFuture?'Not yet due':'Missed — not paid'}">${dayNum}</div>`;
       }).join('');
     } else {
       document.getElementById('booklet-cycle-day').textContent='No cycle';
